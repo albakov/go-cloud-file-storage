@@ -1,0 +1,15 @@
+.editorconfig
+.git
+Makefile
+README.md
+.idea
+.vscode
+requests
+/config/app_example.toml
+.env_example
+.dockerignore
+.gitignore
+cloud_file_storage
+.env_example
+.env
+db

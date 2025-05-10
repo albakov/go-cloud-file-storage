@@ -1,0 +1,510 @@
+basePath: /api
+definitions:
+  ErrorResponse:
+    properties:
+      message:
+        example: error message
+        type: string
+    type: object
+  LoginRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: secret
+        type: string
+    type: object
+  LoginResponse:
+    properties:
+      access_token:
+        example: secret-access-token
+        type: string
+    type: object
+  ProfileResponse:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+    type: object
+  RefreshAccessTokenResponse:
+    properties:
+      access_token:
+        example: secret-access-token
+        type: string
+      email:
+        example: user@example.com
+        type: string
+    type: object
+  RegisterRequest:
+    properties:
+      email:
+        example: user@example.com
+        type: string
+      password:
+        example: secret
+        type: string
+    type: object
+  Response:
+    properties:
+      name:
+        example: folder2
+        type: string
+      path:
+        example: /folder1/folder2/
+        type: string
+      size:
+        example: 123456789
+        type: integer
+      type:
+        example: DIRECTORY
+        type: string
+    type: object
+host: localhost:3001
+info:
+  contact: {}
+  description: This is a cloud file storage server.
+  title: Cloud File Storage API
+  version: "1.0"
+paths:
+  /auth/refresh-token:
+    post:
+      consumes:
+      - application/json
+      description: Create new access token by refresh_token
+      parameters:
+      - description: Cookie refresh_token
+        in: header
+        name: refresh_token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: User email and new access_token
+          schema:
+            $ref: '#/definitions/RefreshAccessTokenResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Refresh access_token
+      tags:
+      - auth
+  /auth/sign-in:
+    post:
+      consumes:
+      - application/json
+      description: Auth user using email and password
+      parameters:
+      - description: Credentials to auth
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Success auth
+          headers:
+            refresh_token:
+              description: Set refresh token in cookie to recreate access_token
+              type: string
+          schema:
+            $ref: '#/definitions/LoginResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: User login
+      tags:
+      - auth
+  /auth/sign-out:
+    post:
+      consumes:
+      - application/json
+      description: Sign out
+      parameters:
+      - description: Cookie refresh_token
+        in: header
+        name: refresh_token
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: User logout
+      tags:
+      - auth
+  /auth/sign-up:
+    post:
+      consumes:
+      - application/json
+      description: Register user using email and password
+      parameters:
+      - description: Credentials to register
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: User created
+          schema:
+            $ref: '#/definitions/LoginResponse'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "409":
+          description: User already exists
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: User Registration
+      tags:
+      - auth
+  /directory:
+    get:
+      consumes:
+      - application/json
+      description: Show resources in the directory
+      parameters:
+      - description: path=/folder1/folder2/
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of resources
+          schema:
+            items:
+              $ref: '#/definitions/Response'
+            type: array
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Show resources in the directory
+      tags:
+      - directory
+    post:
+      consumes:
+      - application/json
+      description: Create directory in the given path
+      parameters:
+      - description: path=/folder/new-folder/
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created resource
+          schema:
+            $ref: '#/definitions/Response'
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Store directory
+      tags:
+      - directory
+  /resource:
+    delete:
+      consumes:
+      - application/json
+      description: Delete resource in the given path
+      parameters:
+      - description: path=/folder1/folder2/
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Delete resource
+      tags:
+      - resource
+    get:
+      consumes:
+      - application/json
+      description: Show resource data
+      parameters:
+      - description: path=/folder1/folder2/
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Resource data
+          schema:
+            $ref: '#/definitions/Response'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Show resource
+      tags:
+      - resource
+    post:
+      consumes:
+      - application/json
+      description: Store resource in the given path
+      parameters:
+      - description: path=/folder1/folder2/
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: 'Must consist json string with paths. Keys are name of resource
+          and values are full path. Example: {''folder'':''/folder1/folder/'',...}'
+        in: formData
+        name: paths
+        required: true
+        type: string
+      - collectionFormat: csv
+        description: Uploading files
+        in: formData
+        items:
+          type: file
+        name: files
+        required: true
+        type: array
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Returns list of created resources
+          schema:
+            items:
+              $ref: '#/definitions/Response'
+            type: array
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Store resource
+      tags:
+      - resource
+  /resource/download:
+    get:
+      consumes:
+      - application/json
+      description: Download resource from the given path
+      parameters:
+      - description: path=/folder1/folder2/
+        in: query
+        name: path
+        required: true
+        type: string
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/octet-stream
+      responses:
+        "200":
+          description: If path is a folder, returns zip archive, else - attachment.
+            Content-Type for response is application/octet-stream
+          schema:
+            type: string
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "404":
+          description: Not found
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "500":
+          description: Server error
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Download resource
+      tags:
+      - resource
+  /resource/move:
+    get:
+      consumes:
+      - application/json
+      description: Move resource $from $to
+      parameters:
+      - description: from=/folder/file
+        in: query
+        name: from
+        required: true
+        type: string
+      - description: to=/another-folder/file
+        in: query
+        name: to
+        required: true
+        type: string
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No content
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Move resource
+      tags:
+      - resource
+  /resource/search:
+    get:
+      consumes:
+      - application/json
+      description: Search resource by query
+      parameters:
+      - description: query=file-name
+        in: query
+        name: query
+        required: true
+        type: string
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: List of resources
+          schema:
+            items:
+              $ref: '#/definitions/Response'
+            type: array
+        "400":
+          description: Bad request
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Search resource
+      tags:
+      - resource
+  /user/me:
+    get:
+      consumes:
+      - application/json
+      description: Show profile info (email)
+      parameters:
+      - description: Authorization Bearer <ACCESS_TOKEN>
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: Email address
+          schema:
+            $ref: '#/definitions/ProfileResponse'
+        "401":
+          description: Unauthorized
+          schema:
+            $ref: '#/definitions/ErrorResponse'
+      summary: Profile
+      tags:
+      - auth
+swagger: "2.0"
