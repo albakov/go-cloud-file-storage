@@ -6,7 +6,7 @@
         "contact": {},
         "version": "1.0"
     },
-    "host": "localhost:3001",
+    "host": "localhost:80",
     "basePath": "/api",
     "paths": {
         "/auth/refresh-token": {
@@ -33,7 +33,7 @@
                 ],
                 "responses": {
                     "200": {
-                        "description": "User email and new access_token",
+                        "description": "New access_token",
                         "schema": {
                             "$ref": "#/definitions/RefreshAccessTokenResponse"
                         }
@@ -327,6 +327,12 @@
                     },
                     "404": {
                         "description": "Not found",
+                        "schema": {
+                            "$ref": "#/definitions/ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Server error",
                         "schema": {
                             "$ref": "#/definitions/ErrorResponse"
                         }
@@ -714,10 +720,6 @@
                 "access_token": {
                     "type": "string",
                     "example": "secret-access-token"
-                },
-                "email": {
-                    "type": "string",
-                    "example": "user@example.com"
                 }
             }
         },
