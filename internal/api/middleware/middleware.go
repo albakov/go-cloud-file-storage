@@ -19,18 +19,18 @@ func New(j *jwt.JWT) *Middleware {
 	}
 }
 
-func (m *Middleware) AuthenticatedMiddleware(c *fiber.Ctx) error {
-	t, err := m.jwt.ValidateAccessToken(strings.TrimPrefix(c.Get("Authorization"), "Bearer "))
+func (m *Middleware) AuthenticatedMiddleware(ctx *fiber.Ctx) error {
+	t, err := m.jwt.ValidateAccessToken(strings.TrimPrefix(ctx.Get("Authorization"), "Bearer "))
 	if err != nil || !t.Valid {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
 	userId, err := t.Claims.GetSubject()
 	if err != nil || userId == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	c.Locals("user_id", userId)
+	ctx.Locals("user_id", userId)
 
-	return c.Next()
+	return ctx.Next()
 }

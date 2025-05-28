@@ -9,14 +9,14 @@ import (
 )
 
 type Repository struct {
-	f  string
-	db *sql.DB
+	pkg string
+	db  *sql.DB
 }
 
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{
-		f:  "user.repository",
-		db: db,
+		pkg: "user.repository",
+		db:  db,
 	}
 }
 
@@ -25,12 +25,12 @@ func (u *Repository) Create(us User) (User, error) {
 
 	stmt, err := u.db.Prepare("INSERT INTO users (email, password) VALUES (?, ?)")
 	if err != nil {
-		return User{}, logger.Error(u.f, op, err)
+		return User{}, logger.Error(u.pkg, op, err)
 	}
 	defer func(stmt *sql.Stmt) {
 		err := stmt.Close()
 		if err != nil {
-			logger.Add(u.f, op, err)
+			logger.Add(u.pkg, op, err)
 		}
 	}(stmt)
 
@@ -42,12 +42,12 @@ func (u *Repository) Create(us User) (User, error) {
 			return User{}, storage.ErrDuplicateNotAllowed
 		}
 
-		return User{}, logger.Error(u.f, op, err)
+		return User{}, logger.Error(u.pkg, op, err)
 	}
 
 	id, err := exec.LastInsertId()
 	if err != nil {
-		return User{}, logger.Error(u.f, op, err)
+		return User{}, logger.Error(u.pkg, op, err)
 	}
 
 	us.Id = id
@@ -65,7 +65,7 @@ func (u *Repository) IsExistsByEmail(email string) bool {
 			return false
 		}
 
-		logger.Add(u.f, op, err)
+		logger.Add(u.pkg, op, err)
 
 		return true
 	}
@@ -90,7 +90,7 @@ func (u *Repository) ByEmail(email string) (User, error) {
 			return User{}, storage.ErrNotFound
 		}
 
-		return User{}, logger.Error(u.f, op, err)
+		return User{}, logger.Error(u.pkg, op, err)
 	}
 
 	return us, nil
@@ -109,7 +109,7 @@ func (u *Repository) ById(userId int64) (User, error) {
 			return User{}, storage.ErrNotFound
 		}
 
-		return User{}, logger.Error(u.f, op, err)
+		return User{}, logger.Error(u.pkg, op, err)
 	}
 
 	return us, nil

@@ -20,8 +20,8 @@ import (
 )
 
 type Auth struct {
-	f                  string
-	c                  *config.Config
+	pkg                string
+	conf               *config.Config
 	jwt                *jwt.JWT
 	userService        UserService
 	userSessionService UserSessionService
@@ -38,10 +38,10 @@ type UserSessionService interface {
 	DeleteUserSession(userId int64, refreshToken string) error
 }
 
-func New(c *config.Config, db *sql.DB, j *jwt.JWT) *Auth {
+func New(conf *config.Config, db *sql.DB, j *jwt.JWT) *Auth {
 	return &Auth{
-		f:                  "auth",
-		c:                  c,
+		pkg:                "auth",
+		conf:               conf,
 		jwt:                j,
 		userService:        userservice.NewService(db),
 		userSessionService: usersessionservice.NewService(db),
@@ -61,19 +61,19 @@ func New(c *config.Config, db *sql.DB, j *jwt.JWT) *Auth {
 //	@Failure		401			{object}	entity.ErrorResponse	"Unauthorized"
 //	@Header			200			{string}	refresh_token			"Set refresh token in cookie to recreate access_token"
 //	@Router			/auth/sign-in [post]
-func (a *Auth) LoginHandler(c *fiber.Ctx) error {
+func (a *Auth) LoginHandler(ctx *fiber.Ctx) error {
 	const op = "loginHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
 	var r profile.LoginRequest
-	err := c.BodyParser(&r)
+	err := ctx.BodyParser(&r)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
 	if !a.isEmailAndPasswordValid(r.Email, r.Password) {
-		return c.Status(fiber.StatusUnauthorized).JSON(
+		return ctx.Status(fiber.StatusUnauthorized).JSON(
 			&entity.ErrorResponse{Message: controller.MessageLoginOrPasswordInvalid},
 		)
 	}
@@ -81,28 +81,28 @@ func (a *Auth) LoginHandler(c *fiber.Ctx) error {
 	us, err := a.userService.UserByEmail(r.Email)
 	if err != nil {
 		if !errors.Is(err, userservice.ErrNotFound) {
-			logger.Add(a.f, op, err)
+			logger.Add(a.pkg, op, err)
 		}
 
-		return c.Status(fiber.StatusUnauthorized).JSON(
+		return ctx.Status(fiber.StatusUnauthorized).JSON(
 			&entity.ErrorResponse{Message: controller.MessageLoginOrPasswordInvalid},
 		)
 	}
 
 	if !password.CheckPassword(r.Password, us.Password) {
-		return c.Status(fiber.StatusUnauthorized).JSON(
+		return ctx.Status(fiber.StatusUnauthorized).JSON(
 			&entity.ErrorResponse{Message: controller.MessageLoginOrPasswordInvalid},
 		)
 	}
 
 	accessToken, refreshToken, err := a.tokens(us.Id)
 	if err != nil {
-		logger.Add(a.f, op, err)
+		logger.Add(a.pkg, op, err)
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	expires := time.Now().Add(time.Hour * time.Duration(a.c.CookieExpires))
+	expires := time.Now().Add(time.Hour * time.Duration(a.conf.CookieExpires))
 	_, err = a.userSessionService.CreateUserSession(usersessionservice.UserSession{
 		UserId:       us.Id,
 		RefreshToken: refreshToken,
@@ -110,16 +110,16 @@ func (a *Auth) LoginHandler(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		if !errors.Is(err, usersessionservice.ErrAlreadyExists) {
-			logger.Add(a.f, op, err)
+			logger.Add(a.pkg, op, err)
 		}
 
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	a.setCookie(c, refreshToken, expires)
-	c.Status(fiber.StatusOK)
+	a.setCookie(ctx, refreshToken, expires)
+	ctx.Status(fiber.StatusOK)
 
-	return c.JSON(&profile.LoginResponse{
+	return ctx.JSON(&profile.LoginResponse{
 		AccessToken: accessToken,
 	})
 }
@@ -137,19 +137,19 @@ func (a *Auth) LoginHandler(c *fiber.Ctx) error {
 //	@Failure		409			{object}	entity.ErrorResponse	"User already exists"
 //	@Header			200			{string}	refresh_token			"Set refresh token in cookie to recreate access_token"
 //	@Router			/auth/sign-up [post]
-func (a *Auth) RegisterHandler(c *fiber.Ctx) error {
+func (a *Auth) RegisterHandler(ctx *fiber.Ctx) error {
 	const op = "registerHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
 	var r profile.RegisterRequest
-	err := c.BodyParser(&r)
+	err := ctx.BodyParser(&r)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
 	if !a.isEmailAndPasswordValid(r.Email, r.Password) {
-		return c.Status(fiber.StatusUnauthorized).JSON(
+		return ctx.Status(fiber.StatusUnauthorized).JSON(
 			&entity.ErrorResponse{Message: controller.MessageLoginOrPasswordInvalid},
 		)
 	}
@@ -160,24 +160,24 @@ func (a *Auth) RegisterHandler(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		if errors.Is(err, userservice.ErrAlreadyExists) {
-			return c.Status(fiber.StatusConflict).JSON(
+			return ctx.Status(fiber.StatusConflict).JSON(
 				&entity.ErrorResponse{Message: controller.MessageUserAlreadyExists},
 			)
 		}
 
-		logger.Add(a.f, op, err)
+		logger.Add(a.pkg, op, err)
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
 	accessToken, refreshToken, err := a.tokens(us.Id)
 	if err != nil {
-		logger.Add(a.f, op, err)
+		logger.Add(a.pkg, op, err)
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	expires := time.Now().Add(time.Hour * time.Duration(a.c.CookieExpires))
+	expires := time.Now().Add(time.Hour * time.Duration(a.conf.CookieExpires))
 	_, err = a.userSessionService.CreateUserSession(usersessionservice.UserSession{
 		UserId:       us.Id,
 		RefreshToken: refreshToken,
@@ -185,16 +185,16 @@ func (a *Auth) RegisterHandler(c *fiber.Ctx) error {
 	})
 	if err != nil {
 		if !errors.Is(err, usersessionservice.ErrAlreadyExists) {
-			logger.Add(a.f, op, err)
+			logger.Add(a.pkg, op, err)
 		}
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	a.setCookie(c, refreshToken, expires)
-	c.Status(fiber.StatusCreated)
+	a.setCookie(ctx, refreshToken, expires)
+	ctx.Status(fiber.StatusCreated)
 
-	return c.JSON(&profile.LoginResponse{
+	return ctx.JSON(&profile.LoginResponse{
 		AccessToken: accessToken,
 	})
 }
@@ -210,35 +210,35 @@ func (a *Auth) RegisterHandler(c *fiber.Ctx) error {
 //	@Success		200				{object}	profile.RefreshAccessTokenResponse	"New access_token"
 //	@Failure		401				{object}	entity.ErrorResponse				"Unauthorized"
 //	@Router			/auth/refresh-token [post]
-func (a *Auth) RefreshHandler(c *fiber.Ctx) error {
+func (a *Auth) RefreshHandler(ctx *fiber.Ctx) error {
 	const op = "refreshHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	refreshToken := c.Cookies("refresh_token")
+	refreshToken := ctx.Cookies("refresh_token")
 	if refreshToken == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
 	us, err := a.userSessionService.ValidUserSessionByRefreshToken(refreshToken)
 	if err != nil {
 		if !errors.Is(err, usersessionservice.ErrNotFound) && !errors.Is(err, usersessionservice.ErrSessionExpired) {
-			logger.Add(a.f, op, err)
+			logger.Add(a.pkg, op, err)
 		}
 
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
 	accessToken, err := a.jwt.GenerateAccessToken(us.UserId)
 	if err != nil {
-		logger.Add(a.f, op, err)
+		logger.Add(a.pkg, op, err)
 
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	c.Status(fiber.StatusOK)
+	ctx.Status(fiber.StatusOK)
 
-	return c.JSON(&profile.RefreshAccessTokenResponse{
+	return ctx.JSON(&profile.RefreshAccessTokenResponse{
 		AccessToken: accessToken,
 	})
 }
@@ -254,47 +254,47 @@ func (a *Auth) RefreshHandler(c *fiber.Ctx) error {
 //	@Success		200
 //	@Failure		401	{object}	entity.ErrorResponse	"Unauthorized"
 //	@Router			/auth/sign-out [post]
-func (a *Auth) LogoutHandler(c *fiber.Ctx) error {
+func (a *Auth) LogoutHandler(ctx *fiber.Ctx) error {
 	const op = "logoutHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	refreshToken := c.Cookies("refresh_token")
+	refreshToken := ctx.Cookies("refresh_token")
 	if refreshToken == "" {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
 	us, err := a.userSessionService.ValidUserSessionByRefreshToken(refreshToken)
 	if err != nil {
 		if !errors.Is(err, usersessionservice.ErrNotFound) && !errors.Is(err, usersessionservice.ErrSessionExpired) {
-			logger.Add(a.f, op, err)
+			logger.Add(a.pkg, op, err)
 		}
 
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
 	err = a.userSessionService.DeleteUserSession(us.UserId, refreshToken)
 	if err != nil {
-		logger.Add(a.f, op, err)
+		logger.Add(a.pkg, op, err)
 
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
 	// clear cookie
-	a.setCookie(c, "", time.Now())
-	c.Status(fiber.StatusOK)
+	a.setCookie(ctx, "", time.Now())
+	ctx.Status(fiber.StatusOK)
 
 	return nil
 }
 
-func (a *Auth) setCookie(c *fiber.Ctx, refreshToken string, expires time.Time) {
-	c.Cookie(&fiber.Cookie{
+func (a *Auth) setCookie(ctx *fiber.Ctx, refreshToken string, expires time.Time) {
+	ctx.Cookie(&fiber.Cookie{
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		Path:     "/",
 		HTTPOnly: true,
-		Secure:   a.c.CookieSecure,
-		SameSite: a.c.CookieSameSite,
+		Secure:   a.conf.CookieSecure,
+		SameSite: a.conf.CookieSameSite,
 		Expires:  expires,
 	})
 }
@@ -304,12 +304,12 @@ func (a *Auth) tokens(userId int64) (string, string, error) {
 
 	accessToken, err := a.jwt.GenerateAccessToken(userId)
 	if err != nil {
-		return "", "", logger.Error(a.f, op, err)
+		return "", "", logger.Error(a.pkg, op, err)
 	}
 
 	refreshToken, err := a.jwt.GenerateRefreshToken()
 	if err != nil {
-		return "", "", logger.Error(a.f, op, err)
+		return "", "", logger.Error(a.pkg, op, err)
 	}
 
 	return accessToken, refreshToken, nil

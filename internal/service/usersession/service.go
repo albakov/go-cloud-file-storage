@@ -16,7 +16,7 @@ var (
 )
 
 type Service struct {
-	f               string
+	pkg             string
 	userSessionRepo Repository
 }
 
@@ -28,7 +28,7 @@ type Repository interface {
 
 func NewService(db *sql.DB) *Service {
 	return &Service{
-		f:               "usersession.service",
+		pkg:             "usersession.service",
 		userSessionRepo: usersession.NewRepository(db),
 	}
 }
@@ -42,7 +42,7 @@ func (s *Service) ValidUserSessionByRefreshToken(refreshToken string) (usersessi
 			return usersession.Session{}, ErrNotFound
 		}
 
-		return usersession.Session{}, logger.Error(s.f, op, err)
+		return usersession.Session{}, logger.Error(s.pkg, op, err)
 	}
 
 	expiresAt, err := time.Parse(time.DateTime, us.ExpiredAt)
@@ -70,7 +70,7 @@ func (s *Service) CreateUserSession(userSessionEntity UserSession) (usersession.
 			return usersession.Session{}, ErrAlreadyExists
 		}
 
-		return usersession.Session{}, logger.Error(s.f, op, err)
+		return usersession.Session{}, logger.Error(s.pkg, op, err)
 	}
 
 	return us, nil
@@ -81,7 +81,7 @@ func (s *Service) DeleteUserSession(userId int64, refreshToken string) error {
 
 	err := s.userSessionRepo.Delete(userId, refreshToken)
 	if err != nil {
-		return logger.Error(s.f, op, err)
+		return logger.Error(s.pkg, op, err)
 	}
 
 	return nil

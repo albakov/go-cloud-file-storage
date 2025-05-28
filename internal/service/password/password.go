@@ -5,14 +5,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const f = "password"
-
 func CreateHashedPassword(password string) (string, error) {
-	const op = "CreateHashedPassword"
-
 	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return "", logger.Error(f, op, err)
+		return "", logger.Error("password", "CreateHashedPassword", err)
 	}
 
 	return string(hashed), nil

@@ -20,8 +20,8 @@ import (
 )
 
 type Resource struct {
-	f         string
-	c         *config.Config
+	pkg       string
+	conf      *config.Config
 	s3Service S3Service
 }
 
@@ -43,11 +43,11 @@ type S3Service interface {
 	UserFolderPath(userId int64) string
 }
 
-func New(c *config.Config) *Resource {
+func New(conf *config.Config) *Resource {
 	return &Resource{
-		f:         "resource",
-		c:         c,
-		s3Service: s3.NewService(s3.NewClient(c), c.S3Bucket),
+		pkg:       "resource",
+		conf:      conf,
+		s3Service: s3.NewService(s3.NewClient(conf), conf.S3Bucket),
 	}
 }
 
@@ -65,40 +65,40 @@ func New(c *config.Config) *Resource {
 //	@Failure		404				{object}	entity.ErrorResponse	"Not found"
 //	@Failure		500				{object}	entity.ErrorResponse	"Server error"
 //	@Router			/resource [get]
-func (res *Resource) ShowHandler(c *fiber.Ctx) error {
+func (res *Resource) ShowHandler(ctx *fiber.Ctx) error {
 	const op = "ShowHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	path, err := res.requestedPath(c, "path", userId)
+	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
+		return ctx.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
 	}
 
-	object, err := res.s3Service.Object(c.Context(), path)
+	object, err := res.s3Service.Object(ctx.Context(), path)
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
+		return ctx.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
 	}
 
 	stat, err := object.Stat()
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusInternalServerError).JSON(
+		return ctx.Status(fiber.StatusInternalServerError).JSON(
 			&entity.ErrorResponse{Message: controller.MessageServerError},
 		)
 	}
 
-	c.Status(fiber.StatusOK)
+	ctx.Status(fiber.StatusOK)
 
-	return c.JSON(&resource.Response{
+	return ctx.JSON(&resource.Response{
 		Path: res.s3Service.PathToObjectWithoutPrefix(res.s3Service.UserFolderPath(userId), stat.Key),
 		Name: filepath.Base(stat.Key),
 		Size: stat.Size,
@@ -121,53 +121,53 @@ func (res *Resource) ShowHandler(c *fiber.Ctx) error {
 //	@Failure		400				{object}	entity.ErrorResponse	"Bad request"
 //	@Failure		401				{object}	entity.ErrorResponse	"Unauthorized"
 //	@Router			/resource [post]
-func (res *Resource) StoreHandler(c *fiber.Ctx) error {
+func (res *Resource) StoreHandler(ctx *fiber.Ctx) error {
 	const op = "StoreHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	path, err := res.requestedPath(c, "path", userId)
+	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	pathsJson := c.FormValue("paths")
+	pathsJson := ctx.FormValue("paths")
 	paths := make(map[string]string)
 
 	err = json.Unmarshal([]byte(pathsJson), &paths)
 	if err != nil {
-		logger.Add(res.f, op, fmt.Errorf("invalid paths JSON: %w", err))
+		logger.Add(res.pkg, op, fmt.Errorf("invalid paths JSON: %w", err))
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	form, err := c.MultipartForm()
+	form, err := ctx.MultipartForm()
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
 	files := form.File["files"]
 
 	for _, file := range files {
 		if _, ok := paths[file.Filename]; !ok {
-			logger.Add(res.f, op, err)
+			logger.Add(res.pkg, op, err)
 
-			return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+			return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 		}
 	}
 
-	data := res.s3Service.StoreObject(c.Context(), files, paths, userId, path)
+	data := res.s3Service.StoreObject(ctx.Context(), files, paths, userId, path)
 
-	c.Status(fiber.StatusCreated)
+	ctx.Status(fiber.StatusCreated)
 
-	return c.JSON(data)
+	return ctx.JSON(data)
 }
 
 // DeleteHandler godoc
@@ -184,29 +184,29 @@ func (res *Resource) StoreHandler(c *fiber.Ctx) error {
 //	@Failure		401				{object}	entity.ErrorResponse	"Unauthorized"
 //	@Failure		404				{object}	entity.ErrorResponse	"Not found"
 //	@Router			/resource [delete]
-func (res *Resource) DeleteHandler(c *fiber.Ctx) error {
+func (res *Resource) DeleteHandler(ctx *fiber.Ctx) error {
 	const op = "DeleteHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	path, err := res.requestedPath(c, "path", userId)
+	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	err = res.s3Service.Delete(c.Context(), path)
+	err = res.s3Service.Delete(ctx.Context(), path)
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
+		return ctx.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
 	}
 
-	c.Status(fiber.StatusNoContent)
+	ctx.Status(fiber.StatusNoContent)
 
 	return nil
 }
@@ -226,62 +226,62 @@ func (res *Resource) DeleteHandler(c *fiber.Ctx) error {
 //	@Failure		404				{object}	entity.ErrorResponse	"Not found"
 //	@Failure		500				{object}	entity.ErrorResponse	"Server error"
 //	@Router			/resource/download [get]
-func (res *Resource) DownloadHandler(c *fiber.Ctx) error {
+func (res *Resource) DownloadHandler(ctx *fiber.Ctx) error {
 	const op = "DownloadHandler"
 
-	c.Accepts("application/json")
-	c.Set(fiber.HeaderAccept, "application/json")
+	ctx.Accepts("application/json")
+	ctx.Set(fiber.HeaderAccept, "application/json")
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	path, err := res.requestedPath(c, "path", userId)
+	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
 	// zip all in directory
 	if path.IsDirectory {
-		buf, err := res.s3Service.MakeZip(c.Context(), path)
+		buf, err := res.s3Service.MakeZip(ctx.Context(), path)
 		if err != nil {
-			logger.Add(res.f, op, err)
+			logger.Add(res.pkg, op, err)
 
-			return c.Status(fiber.StatusInternalServerError).JSON(
+			return ctx.Status(fiber.StatusInternalServerError).JSON(
 				&entity.ErrorResponse{Message: controller.MessageServerError},
 			)
 		}
 
-		c.Status(fiber.StatusOK)
-		c.Set(fiber.HeaderContentType, "application/octet-stream")
-		c.Set(fiber.HeaderContentDisposition, "attachment; filename=\"archive.zip\"")
+		ctx.Status(fiber.StatusOK)
+		ctx.Set(fiber.HeaderContentType, "application/octet-stream")
+		ctx.Set(fiber.HeaderContentDisposition, "attachment; filename=\"archive.zip\"")
 
-		return c.Send(buf.Bytes())
+		return ctx.Send(buf.Bytes())
 	}
 
-	object, err := res.s3Service.Object(c.Context(), path)
+	object, err := res.s3Service.Object(ctx.Context(), path)
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusInternalServerError).JSON(
+		return ctx.Status(fiber.StatusInternalServerError).JSON(
 			&entity.ErrorResponse{Message: controller.MessageServerError},
 		)
 	}
 
 	stat, err := object.Stat()
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusInternalServerError).JSON(
+		return ctx.Status(fiber.StatusInternalServerError).JSON(
 			&entity.ErrorResponse{Message: controller.MessageServerError},
 		)
 	}
 
-	c.Set(fiber.HeaderContentType, "application/octet-stream")
-	c.Set(fiber.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(stat.Key)))
+	ctx.Set(fiber.HeaderContentType, "application/octet-stream")
+	ctx.Set(fiber.HeaderContentDisposition, fmt.Sprintf(`attachment; filename="%s"`, filepath.Base(stat.Key)))
 
-	return c.SendStream(object)
+	return ctx.SendStream(object)
 }
 
 // SearchHandler godoc
@@ -297,24 +297,24 @@ func (res *Resource) DownloadHandler(c *fiber.Ctx) error {
 //	@Failure		400				{object}	entity.ErrorResponse	"Bad request"
 //	@Failure		401				{object}	entity.ErrorResponse	"Unauthorized"
 //	@Router			/resource/search [get]
-func (res *Resource) SearchHandler(c *fiber.Ctx) error {
-	controller.SetCommonHeaders(c)
+func (res *Resource) SearchHandler(ctx *fiber.Ctx) error {
+	controller.SetCommonHeaders(ctx)
 
-	query := c.Query("query", "")
+	query := ctx.Query("query", "")
 	if query == "" {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	data := res.s3Service.Search(c.Context(), userId, query)
+	data := res.s3Service.Search(ctx.Context(), userId, query)
 
-	c.Status(fiber.StatusOK)
+	ctx.Status(fiber.StatusOK)
 
-	return c.JSON(&data)
+	return ctx.JSON(&data)
 }
 
 // MoveHandler godoc
@@ -331,39 +331,39 @@ func (res *Resource) SearchHandler(c *fiber.Ctx) error {
 //	@Failure		400				{object}	entity.ErrorResponse	"Bad request"
 //	@Failure		401				{object}	entity.ErrorResponse	"Unauthorized"
 //	@Router			/resource/move [get]
-func (res *Resource) MoveHandler(c *fiber.Ctx) error {
+func (res *Resource) MoveHandler(ctx *fiber.Ctx) error {
 	const op = "MoveHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	from, err := res.requestedPath(c, "from", userId)
+	from, err := res.requestedPath(ctx, "from", userId)
 	if err != nil || from.CleanPath == "/" {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	to, err := res.requestedPath(c, "to", userId)
+	to, err := res.requestedPath(ctx, "to", userId)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
 	// prevent create root folder as a child to self
 	if strings.HasPrefix(to.CleanPath, from.CleanPath) {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	err = res.s3Service.Move(c.Context(), to, from)
+	err = res.s3Service.Move(ctx.Context(), to, from)
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	c.Status(fiber.StatusNoContent)
+	ctx.Status(fiber.StatusNoContent)
 
 	return nil
 }
@@ -381,23 +381,23 @@ func (res *Resource) MoveHandler(c *fiber.Ctx) error {
 //	@Failure		401				{object}	entity.ErrorResponse	"Unauthorized"
 //	@Failure		404				{object}	entity.ErrorResponse	"Not found"
 //	@Router			/directory [get]
-func (res *Resource) DirectoryShowHandler(c *fiber.Ctx) error {
-	controller.SetCommonHeaders(c)
+func (res *Resource) DirectoryShowHandler(ctx *fiber.Ctx) error {
+	controller.SetCommonHeaders(ctx)
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	path, err := res.requestedPath(c, "path", userId)
+	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
-		return c.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
+		return ctx.Status(fiber.StatusNotFound).JSON(&entity.ErrorResponse{Message: controller.MessageNotFound})
 	}
 
-	data := res.s3Service.PaginateDirectory(c.Context(), userId, path)
-	c.Status(fiber.StatusOK)
+	data := res.s3Service.PaginateDirectory(ctx.Context(), userId, path)
+	ctx.Status(fiber.StatusOK)
 
-	return c.JSON(&data)
+	return ctx.JSON(&data)
 }
 
 // DirectoryStoreHandler godoc
@@ -413,31 +413,31 @@ func (res *Resource) DirectoryShowHandler(c *fiber.Ctx) error {
 //	@Failure		400				{object}	entity.ErrorResponse	"Bad request"
 //	@Failure		401				{object}	entity.ErrorResponse	"Unauthorized"
 //	@Router			/directory [post]
-func (res *Resource) DirectoryStoreHandler(c *fiber.Ctx) error {
+func (res *Resource) DirectoryStoreHandler(ctx *fiber.Ctx) error {
 	const op = "DirectoryStoreHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	path, err := res.requestedPath(c, "path", userId)
+	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	object, err := res.s3Service.StoreDirectory(c.Context(), path)
+	object, err := res.s3Service.StoreDirectory(ctx.Context(), path)
 	if err != nil {
-		logger.Add(res.f, op, err)
+		logger.Add(res.pkg, op, err)
 
-		return c.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
+		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
 	}
 
-	c.Status(fiber.StatusCreated)
+	ctx.Status(fiber.StatusCreated)
 
-	return c.JSON(&resource.Response{
+	return ctx.JSON(&resource.Response{
 		Path: fmt.Sprintf("/%s", path.CleanPath),
 		Name: filepath.Base(object.Key),
 		Size: object.Size,
@@ -445,8 +445,8 @@ func (res *Resource) DirectoryStoreHandler(c *fiber.Ctx) error {
 	})
 }
 
-func (res *Resource) requestedPath(c *fiber.Ctx, key string, userId int64) (resource.Path, error) {
-	path := c.Query(key, "")
+func (res *Resource) requestedPath(ctx *fiber.Ctx, key string, userId int64) (resource.Path, error) {
+	path := ctx.Query(key, "")
 	if path == "" {
 		return resource.Path{}, fmt.Errorf("%s is empty", key)
 	}

@@ -15,7 +15,7 @@ var (
 )
 
 type Service struct {
-	f        string
+	pkg      string
 	userRepo Repository
 }
 
@@ -27,7 +27,7 @@ type Repository interface {
 
 func NewService(db *sql.DB) *Service {
 	return &Service{
-		f:        "user.service",
+		pkg:      "user.service",
 		userRepo: user.NewRepository(db),
 	}
 }
@@ -58,7 +58,7 @@ func (s *Service) CreateUser(us User) (user.User, error) {
 			return user.User{}, ErrAlreadyExists
 		}
 
-		return user.User{}, logger.Error(s.f, op, err)
+		return user.User{}, logger.Error(s.pkg, op, err)
 	}
 
 	return u, nil
@@ -73,7 +73,7 @@ func (s *Service) UserByEmail(email string) (user.User, error) {
 			return user.User{}, ErrNotFound
 		}
 
-		return user.User{}, logger.Error(s.f, op, err)
+		return user.User{}, logger.Error(s.pkg, op, err)
 	}
 
 	return u, nil

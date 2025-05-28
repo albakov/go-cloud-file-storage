@@ -13,7 +13,7 @@ import (
 )
 
 type Profile struct {
-	f        string
+	pkg      string
 	userRepo Repository
 }
 
@@ -23,7 +23,7 @@ type Repository interface {
 
 func New(db *sql.DB) *Profile {
 	return &Profile{
-		f:        "profile",
+		pkg:      "profile",
 		userRepo: user.NewRepository(db),
 	}
 }
@@ -39,28 +39,28 @@ func New(db *sql.DB) *Profile {
 //	@Success		200				{object}	profile.ProfileResponse	"Email address"
 //	@Failure		401				{object}	entity.ErrorResponse	"Unauthorized"
 //	@Router			/user/me [get]
-func (p *Profile) ShowHandler(c *fiber.Ctx) error {
+func (p *Profile) ShowHandler(ctx *fiber.Ctx) error {
 	const op = "ShowHandler"
 
-	controller.SetCommonHeaders(c)
+	controller.SetCommonHeaders(ctx)
 
-	userId := controller.RequestedUserId(c)
+	userId := controller.RequestedUserId(ctx)
 	if userId == 0 {
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
 	us, err := p.userRepo.ById(userId)
 	if err != nil {
 		if !errors.Is(err, storage.ErrNotFound) {
-			logger.Add(p.f, op, err)
+			logger.Add(p.pkg, op, err)
 		}
 
-		return c.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
+		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	c.Status(fiber.StatusOK)
+	ctx.Status(fiber.StatusOK)
 
-	return c.JSON(&profile.ProfileResponse{
+	return ctx.JSON(&profile.ProfileResponse{
 		Email: us.Email.String,
 	})
 }

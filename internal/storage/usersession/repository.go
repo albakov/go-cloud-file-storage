@@ -9,14 +9,14 @@ import (
 )
 
 type Repository struct {
-	f  string
-	db *sql.DB
+	pkg string
+	db  *sql.DB
 }
 
 func NewRepository(db *sql.DB) *Repository {
 	return &Repository{
-		f:  "usersession.repository",
-		db: db,
+		pkg: "usersession.repository",
+		db:  db,
 	}
 }
 
@@ -33,7 +33,7 @@ func (us *Repository) ByRefreshToken(refreshToken string) (Session, error) {
 			return Session{}, storage.ErrNotFound
 		}
 
-		return Session{}, logger.Error(us.f, op, err)
+		return Session{}, logger.Error(us.pkg, op, err)
 	}
 
 	return s, nil
@@ -44,12 +44,12 @@ func (us *Repository) Create(userSession Session) (Session, error) {
 
 	stmt, err := us.db.Prepare("INSERT INTO users_sessions (user_id, refresh_token, expires_at) VALUES (?, ?, ?)")
 	if err != nil {
-		return Session{}, logger.Error(us.f, op, err)
+		return Session{}, logger.Error(us.pkg, op, err)
 	}
 	defer func(stmt *sql.Stmt) {
 		err := stmt.Close()
 		if err != nil {
-			logger.Add(us.f, op, err)
+			logger.Add(us.pkg, op, err)
 		}
 	}(stmt)
 
@@ -61,12 +61,12 @@ func (us *Repository) Create(userSession Session) (Session, error) {
 			return Session{}, storage.ErrDuplicateNotAllowed
 		}
 
-		return Session{}, logger.Error(us.f, op, err)
+		return Session{}, logger.Error(us.pkg, op, err)
 	}
 
 	id, err := exec.LastInsertId()
 	if err != nil {
-		return Session{}, logger.Error(us.f, op, err)
+		return Session{}, logger.Error(us.pkg, op, err)
 	}
 
 	userSession.Id = id
@@ -79,18 +79,18 @@ func (us *Repository) Delete(userId int64, refreshToken string) error {
 
 	stmt, err := us.db.Prepare("DELETE FROM users_sessions WHERE user_id = ? AND refresh_token = ?")
 	if err != nil {
-		return logger.Error(us.f, op, err)
+		return logger.Error(us.pkg, op, err)
 	}
 	defer func(stmt *sql.Stmt) {
 		err := stmt.Close()
 		if err != nil {
-			logger.Add(us.f, op, err)
+			logger.Add(us.pkg, op, err)
 		}
 	}(stmt)
 
 	_, err = stmt.Exec(userId, refreshToken)
 	if err != nil {
-		return logger.Error(us.f, op, err)
+		return logger.Error(us.pkg, op, err)
 	}
 
 	return nil

@@ -16,14 +16,14 @@ import (
 )
 
 type Service struct {
-	f        string
+	pkg      string
 	bucket   string
 	s3Client *minio.Client
 }
 
 func NewService(s3Client *minio.Client, bucket string) *Service {
 	return &Service{
-		f:        "s3_service",
+		pkg:      "s3_service",
 		bucket:   bucket,
 		s3Client: s3Client,
 	}
@@ -39,7 +39,7 @@ func (s *Service) Object(ctx context.Context, path resource.Path) (*minio.Object
 		minio.GetObjectOptions{},
 	)
 	if err != nil {
-		return &minio.Object{}, logger.Error(s.f, op, err)
+		return &minio.Object{}, logger.Error(s.pkg, op, err)
 	}
 
 	return object, nil
@@ -76,7 +76,7 @@ func (s *Service) Delete(ctx context.Context, path resource.Path) error {
 
 	err := s.deleteObject(ctx, path.CleanPath, s.removeOptions())
 	if err != nil {
-		return logger.Error(s.f, op, err)
+		return logger.Error(s.pkg, op, err)
 	}
 
 	return nil
@@ -97,7 +97,7 @@ func (s *Service) Search(ctx context.Context, userId int64, query string) *[]res
 
 	for v := range s.s3Client.ListObjects(ctx, s.bucket, opts) {
 		if v.Err != nil {
-			logger.Add(s.f, op, v.Err)
+			logger.Add(s.pkg, op, v.Err)
 
 			continue
 		}
@@ -129,12 +129,12 @@ func (s *Service) MakeZip(ctx context.Context, path resource.Path) (*bytes.Buffe
 	for v := range s.s3Client.ListObjects(ctx, s.bucket, opts) {
 		err := s.putObjectInZip(ctx, v, zipWriter, path.CleanPath)
 		if err != nil {
-			return nil, logger.Error(s.f, op, err)
+			return nil, logger.Error(s.pkg, op, err)
 		}
 	}
 
 	if err := zipWriter.Close(); err != nil {
-		return nil, logger.Error(s.f, op, err)
+		return nil, logger.Error(s.pkg, op, err)
 	}
 
 	return buf, nil
@@ -149,7 +149,7 @@ func (s *Service) Move(ctx context.Context, to, from resource.Path) error {
 
 		err := s.copyRecursive(ctx, to.CleanPathWithTailingSlash(), fromPath)
 		if err != nil {
-			return logger.Error(s.f, op, err)
+			return logger.Error(s.pkg, op, err)
 		}
 
 		s.deleteRecursive(ctx, fromPath)
@@ -169,12 +169,12 @@ func (s *Service) Move(ctx context.Context, to, from resource.Path) error {
 		},
 	)
 	if err != nil {
-		return logger.Error(s.f, op, err)
+		return logger.Error(s.pkg, op, err)
 	}
 
 	err = s.deleteObject(ctx, from.CleanPath, s.removeOptions())
 	if err != nil {
-		return logger.Error(s.f, op, err)
+		return logger.Error(s.pkg, op, err)
 	}
 
 	return nil
@@ -192,7 +192,7 @@ func (s *Service) StoreDirectory(ctx context.Context, path resource.Path) (minio
 		minio.PutObjectOptions{},
 	)
 	if err != nil {
-		return minio.UploadInfo{}, logger.Error(s.f, op, err)
+		return minio.UploadInfo{}, logger.Error(s.pkg, op, err)
 	}
 
 	return object, nil
@@ -213,7 +213,7 @@ func (s *Service) PaginateDirectory(ctx context.Context, userId int64, path reso
 
 	for v := range objects {
 		if v.Err != nil {
-			logger.Add(s.f, op, v.Err)
+			logger.Add(s.pkg, op, v.Err)
 
 			continue
 		}
@@ -270,14 +270,14 @@ func (s *Service) uploadFile(
 
 	fileData, err := file.Open()
 	if err != nil {
-		logger.Add(s.f, op, err)
+		logger.Add(s.pkg, op, err)
 
 		return
 	}
 	defer func(fileData multipart.File) {
 		err := fileData.Close()
 		if err != nil {
-			logger.Add(s.f, op, err)
+			logger.Add(s.pkg, op, err)
 		}
 	}(fileData)
 
@@ -290,7 +290,7 @@ func (s *Service) uploadFile(
 		opts,
 	)
 	if err != nil {
-		logger.Add(s.f, op, err)
+		logger.Add(s.pkg, op, err)
 
 		return
 	}
@@ -315,14 +315,14 @@ func (s *Service) deleteRecursive(ctx context.Context, path string) {
 
 	for object := range s.s3Client.ListObjects(ctx, s.bucket, opts) {
 		if object.Err != nil {
-			logger.Add(s.f, op, object.Err)
+			logger.Add(s.pkg, op, object.Err)
 
 			continue
 		}
 
 		err := s.deleteObject(ctx, object.Key, removeOpts)
 		if err != nil {
-			logger.Add(s.f, op, object.Err)
+			logger.Add(s.pkg, op, object.Err)
 
 			continue
 		}
@@ -333,7 +333,7 @@ func (s *Service) putObjectInZip(ctx context.Context, v minio.ObjectInfo, zipWri
 	const op = "putObjectInZip"
 
 	if v.Err != nil {
-		return logger.Error(s.f, op, v.Err)
+		return logger.Error(s.pkg, op, v.Err)
 	}
 
 	// skip directory
@@ -343,20 +343,20 @@ func (s *Service) putObjectInZip(ctx context.Context, v minio.ObjectInfo, zipWri
 
 	entry, err := zipWriter.Create(s.PathToObjectWithoutPrefix(v.Key, prefix))
 	if err != nil {
-		return logger.Error(s.f, op, v.Err)
+		return logger.Error(s.pkg, op, v.Err)
 	}
 
 	obj, err := s.s3Client.GetObject(ctx, s.bucket, v.Key, minio.GetObjectOptions{})
 	if err != nil {
-		return logger.Error(s.f, op, v.Err)
+		return logger.Error(s.pkg, op, v.Err)
 	}
 
 	if _, err := io.Copy(entry, obj); err != nil {
-		return logger.Error(s.f, op, v.Err)
+		return logger.Error(s.pkg, op, v.Err)
 	}
 
 	if err := obj.Close(); err != nil {
-		return logger.Error(s.f, op, v.Err)
+		return logger.Error(s.pkg, op, v.Err)
 	}
 
 	return nil
@@ -389,7 +389,7 @@ func (s *Service) copyRecursive(ctx context.Context, to, from string) error {
 
 	for v := range s.s3Client.ListObjects(ctx, s.bucket, opts) {
 		if v.Err != nil {
-			return logger.Error(s.f, op, v.Err)
+			return logger.Error(s.pkg, op, v.Err)
 		}
 
 		isChanged = true
@@ -412,7 +412,7 @@ func (s *Service) copyRecursive(ctx context.Context, to, from string) error {
 			},
 		)
 		if err != nil {
-			return logger.Error(s.f, op, err)
+			return logger.Error(s.pkg, op, err)
 		}
 	}
 
@@ -430,7 +430,7 @@ func (s *Service) copyRecursive(ctx context.Context, to, from string) error {
 			},
 		)
 		if err != nil {
-			return logger.Error(s.f, op, err)
+			return logger.Error(s.pkg, op, err)
 		}
 	}
 
@@ -442,7 +442,7 @@ func (s *Service) deleteObject(ctx context.Context, path string, removeOpts *min
 
 	err := s.s3Client.RemoveObject(ctx, s.bucket, path, *removeOpts)
 	if err != nil {
-		return logger.Error(s.f, op, err)
+		return logger.Error(s.pkg, op, err)
 	}
 
 	return nil

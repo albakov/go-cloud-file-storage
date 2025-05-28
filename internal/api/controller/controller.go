@@ -8,13 +8,13 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-func RequestedUserId(c *fiber.Ctx) int64 {
+func RequestedUserId(ctx *fiber.Ctx) int64 {
 	const (
 		f  = "controller"
 		op = "RequestedUserId"
 	)
 
-	userId, err := strconv.ParseInt(c.Locals("user_id").(string), 10, 64)
+	userId, err := strconv.ParseInt(ctx.Locals("user_id").(string), 10, 64)
 	if err != nil {
 		logger.Add(f, op, err)
 
@@ -30,8 +30,8 @@ func RequestedUserId(c *fiber.Ctx) int64 {
 	return userId
 }
 
-func SetCommonHeaders(c *fiber.Ctx) {
-	c.Accepts("application/json")
-	c.Set(fiber.HeaderContentType, "application/json")
-	c.Set(fiber.HeaderAccept, "application/json")
+func SetCommonHeaders(ctx *fiber.Ctx) {
+	ctx.Accepts("application/json")
+	ctx.Set(fiber.HeaderContentType, "application/json")
+	ctx.Set(fiber.HeaderAccept, "application/json")
 }

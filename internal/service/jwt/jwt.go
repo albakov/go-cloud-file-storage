@@ -12,13 +12,13 @@ import (
 
 type JWT struct {
 	secret []byte
-	c      *config.Config
+	conf   *config.Config
 }
 
-func MustNew(c *config.Config) *JWT {
+func MustNew(conf *config.Config) *JWT {
 	return &JWT{
-		secret: []byte(c.JWTSecret),
-		c:      c,
+		secret: []byte(conf.JWTSecret),
+		conf:   conf,
 	}
 }
 
@@ -26,7 +26,7 @@ func (j *JWT) GenerateAccessToken(userId int64) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.RegisteredClaims{
 		Subject: strconv.Itoa(int(userId)),
 		ExpiresAt: &jwt.NumericDate{
-			Time: time.Now().Add(time.Minute * time.Duration(j.c.JWTExpiresMinutes)),
+			Time: time.Now().Add(time.Minute * time.Duration(j.conf.JWTExpiresMinutes)),
 		},
 		IssuedAt: &jwt.NumericDate{
 			Time: time.Now(),

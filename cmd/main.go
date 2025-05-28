@@ -1,11 +1,16 @@
 package main
 
 import (
-	"database/sql"
+	"context"
 	_ "github.com/albakov/go-cloud-file-storage/docs"
 	"github.com/albakov/go-cloud-file-storage/internal/api"
 	"github.com/albakov/go-cloud-file-storage/internal/config"
+	"github.com/albakov/go-cloud-file-storage/internal/logger"
 	"github.com/albakov/go-cloud-file-storage/internal/storage"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 //	@title			Cloud File Storage API
@@ -15,15 +20,23 @@ import (
 // @host		localhost:80
 // @BasePath	/api
 func main() {
-	c := config.MustNew("")
-	db := storage.MustNewClient(c)
+	conf := config.MustNew("")
+	dbClient := storage.MustNewClient(conf)
+	apiClient := api.MustNewClient(conf, dbClient.DB())
+	apiClient.Start()
 
-	defer func(db *sql.DB) {
-		err := db.Close()
-		if err != nil {
-			panic(err)
-		}
-	}(db)
+	sigs := make(chan os.Signal, 1)
+	signal.Notify(sigs, os.Interrupt, syscall.SIGTERM)
+	<-sigs
 
-	api.MustStart(c, db)
+	_, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := apiClient.Shutdown(); err != nil {
+		logger.Add("main", "main", err)
+	}
+
+	if err := dbClient.Shutdown(); err != nil {
+		logger.Add("main", "main", err)
+	}
 }
