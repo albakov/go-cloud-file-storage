@@ -11,7 +11,6 @@ import (
 	"github.com/albakov/go-cloud-file-storage/internal/api/entity/resource"
 	"github.com/albakov/go-cloud-file-storage/internal/config"
 	"github.com/albakov/go-cloud-file-storage/internal/logger"
-	"github.com/albakov/go-cloud-file-storage/internal/service/s3"
 	"github.com/gofiber/fiber/v2"
 	"github.com/minio/minio-go/v7"
 	"mime/multipart"
@@ -43,11 +42,11 @@ type S3Service interface {
 	UserFolderPath(userId int64) string
 }
 
-func New(conf *config.Config) *Resource {
+func New(conf *config.Config, s3Service S3Service) *Resource {
 	return &Resource{
 		pkg:       "resource",
 		conf:      conf,
-		s3Service: s3.NewService(s3.NewClient(conf), conf.S3Bucket),
+		s3Service: s3Service,
 	}
 }
 
@@ -71,9 +70,6 @@ func (res *Resource) ShowHandler(ctx *fiber.Ctx) error {
 	controller.SetCommonHeaders(ctx)
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
 
 	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
@@ -127,9 +123,6 @@ func (res *Resource) StoreHandler(ctx *fiber.Ctx) error {
 	controller.SetCommonHeaders(ctx)
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
 
 	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
@@ -190,10 +183,6 @@ func (res *Resource) DeleteHandler(ctx *fiber.Ctx) error {
 	controller.SetCommonHeaders(ctx)
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
-
 	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
 		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
@@ -233,9 +222,6 @@ func (res *Resource) DownloadHandler(ctx *fiber.Ctx) error {
 	ctx.Set(fiber.HeaderAccept, "application/json")
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
 
 	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
@@ -306,9 +292,6 @@ func (res *Resource) SearchHandler(ctx *fiber.Ctx) error {
 	}
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
 
 	data := res.s3Service.Search(ctx.Context(), userId, query)
 
@@ -337,9 +320,6 @@ func (res *Resource) MoveHandler(ctx *fiber.Ctx) error {
 	controller.SetCommonHeaders(ctx)
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
 
 	from, err := res.requestedPath(ctx, "from", userId)
 	if err != nil || from.CleanPath == "/" {
@@ -385,9 +365,6 @@ func (res *Resource) DirectoryShowHandler(ctx *fiber.Ctx) error {
 	controller.SetCommonHeaders(ctx)
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
 
 	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {
@@ -419,9 +396,6 @@ func (res *Resource) DirectoryStoreHandler(ctx *fiber.Ctx) error {
 	controller.SetCommonHeaders(ctx)
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
 
 	path, err := res.requestedPath(ctx, "path", userId)
 	if err != nil {

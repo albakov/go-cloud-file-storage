@@ -3,7 +3,6 @@ package storage
 import (
 	"database/sql"
 	"fmt"
-	"github.com/albakov/go-cloud-file-storage/internal/config"
 	"github.com/albakov/go-cloud-file-storage/internal/logger"
 	"log"
 	"time"
@@ -15,8 +14,8 @@ type Client struct {
 	db *sql.DB
 }
 
-func MustNewClient(conf *config.Config) *Client {
-	db, err := sql.Open("mysql", conf.MysqlDSN)
+func MustNewClient(dsn string) *Client {
+	db, err := sql.Open("mysql", dsn)
 	if err != nil {
 		panic(err)
 	}

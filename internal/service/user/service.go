@@ -23,12 +23,13 @@ type Repository interface {
 	Create(user user.User) (user.User, error)
 	IsExistsByEmail(email string) bool
 	ByEmail(email string) (user.User, error)
+	ById(userId int64) (user.User, error)
 }
 
-func NewService(db *sql.DB) *Service {
+func NewService(userRepo Repository) *Service {
 	return &Service{
 		pkg:      "user.service",
-		userRepo: user.NewRepository(db),
+		userRepo: userRepo,
 	}
 }
 
@@ -68,6 +69,21 @@ func (s *Service) UserByEmail(email string) (user.User, error) {
 	const op = "UserEmail"
 
 	u, err := s.userRepo.ByEmail(email)
+	if err != nil {
+		if errors.Is(err, storage.ErrNotFound) {
+			return user.User{}, ErrNotFound
+		}
+
+		return user.User{}, logger.Error(s.pkg, op, err)
+	}
+
+	return u, nil
+}
+
+func (s *Service) UserById(userId int64) (user.User, error) {
+	const op = "UserById"
+
+	u, err := s.userRepo.ById(userId)
 	if err != nil {
 		if errors.Is(err, storage.ErrNotFound) {
 			return user.User{}, ErrNotFound

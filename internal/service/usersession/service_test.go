@@ -4,26 +4,28 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/albakov/go-cloud-file-storage/internal/service/user"
+	userrepo "github.com/albakov/go-cloud-file-storage/internal/storage/user"
+	"github.com/albakov/go-cloud-file-storage/internal/storage/usersession"
 	"github.com/albakov/go-cloud-file-storage/internal/testutil"
 	"testing"
 	"time"
 )
 
+type testService struct {
+	service *user.Service
+	db      *sql.DB
+}
+
 func TestUserSessionService_CreateUserSession(t *testing.T) {
-	db, err := testutil.DbTest()
-	if err != nil {
-		t.Fatal(err)
-	}
+	userService := userTestService(t)
 	defer func(db *sql.DB) {
 		err := db.Close()
 		if err != nil {
 			panic(err)
 		}
-	}(db)
+	}(userService.db)
 
-	userService := user.NewService(db)
-
-	u1, err := userService.CreateUser(user.User{
+	u1, err := userService.service.CreateUser(user.User{
 		Email:    "test@example.ru",
 		Password: "1234",
 	})
@@ -35,10 +37,12 @@ func TestUserSessionService_CreateUserSession(t *testing.T) {
 		if err != nil {
 			t.Errorf("error while delete test user: %v", err)
 		}
-	}(db, u1.Id)
+	}(userService.db, u1.Id)
 
 	refreshToken := "1234"
-	userSessionService := NewService(db)
+	userSessionRepo := usersession.NewRepository(userService.db)
+	userSessionService := NewService(userSessionRepo)
+
 	userSession, err := userSessionService.CreateUserSession(UserSession{
 		UserId:       u1.Id,
 		RefreshToken: refreshToken,
@@ -52,7 +56,7 @@ func TestUserSessionService_CreateUserSession(t *testing.T) {
 		if err != nil {
 			t.Errorf("error while delete user session: %v", err)
 		}
-	}(db, userSession.Id)
+	}(userService.db, userSession.Id)
 
 	u2, err := userSessionService.ValidUserSessionByRefreshToken(refreshToken)
 	if err != nil {
@@ -65,20 +69,15 @@ func TestUserSessionService_CreateUserSession(t *testing.T) {
 }
 
 func TestUserSessionService_CreateUserSessionDuplicate(t *testing.T) {
-	db, err := testutil.DbTest()
-	if err != nil {
-		t.Fatal(err)
-	}
+	userService := userTestService(t)
 	defer func(db *sql.DB) {
 		err := db.Close()
 		if err != nil {
 			panic(err)
 		}
-	}(db)
+	}(userService.db)
 
-	userService := user.NewService(db)
-
-	u1, err := userService.CreateUser(user.User{
+	u1, err := userService.service.CreateUser(user.User{
 		Email:    "test@example.ru",
 		Password: "1234",
 	})
@@ -90,10 +89,11 @@ func TestUserSessionService_CreateUserSessionDuplicate(t *testing.T) {
 		if err != nil {
 			t.Errorf("error while delete test user: %v", err)
 		}
-	}(db, u1.Id)
+	}(userService.db, u1.Id)
 
 	refreshToken := "1234"
-	userSessionService := NewService(db)
+	userSessionRepo := usersession.NewRepository(userService.db)
+	userSessionService := NewService(userSessionRepo)
 
 	userSession1, err := userSessionService.CreateUserSession(UserSession{
 		UserId:       u1.Id,
@@ -108,7 +108,7 @@ func TestUserSessionService_CreateUserSessionDuplicate(t *testing.T) {
 		if err != nil {
 			t.Errorf("error while delete user session: %v", err)
 		}
-	}(db, userSession1.Id)
+	}(userService.db, userSession1.Id)
 
 	userSession2, err := userSessionService.CreateUserSession(UserSession{
 		UserId:       u1.Id,
@@ -120,26 +120,21 @@ func TestUserSessionService_CreateUserSessionDuplicate(t *testing.T) {
 			t.Errorf("error while create new user session: %v", err)
 		}
 	} else {
-		deleteTestUserSession(db, userSession2.Id)
+		deleteTestUserSession(userService.db, userSession2.Id)
 		t.Error("create duplicate user session not allowed")
 	}
 }
 
 func TestUserSessionService_DeleteUserSession(t *testing.T) {
-	db, err := testutil.DbTest()
-	if err != nil {
-		t.Fatal(err)
-	}
+	userService := userTestService(t)
 	defer func(db *sql.DB) {
 		err := db.Close()
 		if err != nil {
 			panic(err)
 		}
-	}(db)
+	}(userService.db)
 
-	userService := user.NewService(db)
-
-	u1, err := userService.CreateUser(user.User{
+	u1, err := userService.service.CreateUser(user.User{
 		Email:    "test@example.ru",
 		Password: "1234",
 	})
@@ -151,9 +146,11 @@ func TestUserSessionService_DeleteUserSession(t *testing.T) {
 		if err != nil {
 			t.Errorf("error while delete test user: %v", err)
 		}
-	}(db, u1.Id)
+	}(userService.db, u1.Id)
 
-	userSessionService := NewService(db)
+	userSessionRepo := usersession.NewRepository(userService.db)
+	userSessionService := NewService(userSessionRepo)
+
 	userSession, err := userSessionService.CreateUserSession(UserSession{
 		UserId:       u1.Id,
 		RefreshToken: "1234",
@@ -167,7 +164,7 @@ func TestUserSessionService_DeleteUserSession(t *testing.T) {
 		if err != nil {
 			t.Errorf("error while delete user session: %v", err)
 		}
-	}(db, userSession.Id)
+	}(userService.db, userSession.Id)
 
 	err = userSessionService.DeleteUserSession(u1.Id, userSession.RefreshToken)
 	if err != nil {
@@ -205,4 +202,16 @@ func deleteTestUserSession(db *sql.DB, userSessionId int64) error {
 	_, err = stmt.Exec(userSessionId)
 
 	return err
+}
+
+func userTestService(t *testing.T) *testService {
+	db, err := testutil.DbTest()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return &testService{
+		service: user.NewService(userrepo.NewRepository(db)),
+		db:      db,
+	}
 }

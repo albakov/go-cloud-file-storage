@@ -1,33 +1,16 @@
 package controller
 
 import (
-	"fmt"
-	"github.com/albakov/go-cloud-file-storage/internal/logger"
-	"strconv"
-
+	"github.com/albakov/go-cloud-file-storage/internal/api/entity/profile"
 	"github.com/gofiber/fiber/v2"
 )
 
 func RequestedUserId(ctx *fiber.Ctx) int64 {
-	const (
-		f  = "controller"
-		op = "RequestedUserId"
-	)
+	return ctx.Locals("user_id").(int64)
+}
 
-	userId, err := strconv.ParseInt(ctx.Locals("user_id").(string), 10, 64)
-	if err != nil {
-		logger.Add(f, op, err)
-
-		return 0
-	}
-
-	if userId == 0 {
-		logger.Add(f, op, fmt.Errorf("invalid user id"))
-
-		return 0
-	}
-
-	return userId
+func RequestedLogin(ctx *fiber.Ctx) profile.LoginRequest {
+	return ctx.Locals("user_data").(profile.LoginRequest)
 }
 
 func SetCommonHeaders(ctx *fiber.Ctx) {

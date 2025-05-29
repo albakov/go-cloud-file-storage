@@ -34,5 +34,5 @@ func DbTest() (*sql.DB, error) {
 		return nil, fmt.Errorf("error while get dir path: %v", err)
 	}
 
-	return storage.MustNewClient(config.MustNew(filepath.Join(dir, ".env.dev"))).DB(), nil
+	return storage.MustNewClient(config.MustNew(filepath.Join(dir, ".env.dev")).MysqlDSN).DB(), nil
 }

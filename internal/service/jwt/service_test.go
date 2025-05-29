@@ -9,13 +9,7 @@ import (
 )
 
 func TestJWT_GenerateAccessToken(t *testing.T) {
-	dir, err := testutil.FindProjectRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	jwtService := MustNew(config.MustNew(filepath.Join(dir, ".env.dev")))
-
+	jwtService := NewService(jwtConfig(t))
 	userId := int64(123456789)
 	token, err := jwtService.GenerateAccessToken(userId)
 	if err != nil {
@@ -28,13 +22,7 @@ func TestJWT_GenerateAccessToken(t *testing.T) {
 }
 
 func TestJWT_ValidateAccessToken(t *testing.T) {
-	dir, err := testutil.FindProjectRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	jwtService := MustNew(config.MustNew(filepath.Join(dir, ".env.dev")))
-
+	jwtService := NewService(jwtConfig(t))
 	userId := int64(123456789)
 	token, err := jwtService.GenerateAccessToken(userId)
 	if err != nil {
@@ -67,13 +55,7 @@ func TestJWT_ValidateAccessToken(t *testing.T) {
 }
 
 func TestJWT_GenerateRefreshToken(t *testing.T) {
-	dir, err := testutil.FindProjectRoot()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	jwtService := MustNew(config.MustNew(filepath.Join(dir, ".env.dev")))
-
+	jwtService := NewService(jwtConfig(t))
 	token, err := jwtService.GenerateRefreshToken()
 	if err != nil {
 		t.Error("generate refresh token error", err)
@@ -81,5 +63,19 @@ func TestJWT_GenerateRefreshToken(t *testing.T) {
 
 	if token == "" {
 		t.Error("empty refresh token")
+	}
+}
+
+func jwtConfig(t *testing.T) *Config {
+	dir, err := testutil.FindProjectRoot()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conf := config.MustNew(filepath.Join(dir, ".env.dev"))
+
+	return &Config{
+		Secret:         conf.JWTSecret,
+		ExpiresMinutes: conf.JWTExpiresMinutes,
 	}
 }

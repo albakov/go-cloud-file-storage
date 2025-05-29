@@ -1,14 +1,12 @@
 package auth
 
 import (
-	"database/sql"
 	"errors"
 	"github.com/albakov/go-cloud-file-storage/internal/api/controller"
 	"github.com/albakov/go-cloud-file-storage/internal/api/entity"
 	"github.com/albakov/go-cloud-file-storage/internal/api/entity/profile"
 	"github.com/albakov/go-cloud-file-storage/internal/config"
 	"github.com/albakov/go-cloud-file-storage/internal/logger"
-	"github.com/albakov/go-cloud-file-storage/internal/service/jwt"
 	"github.com/albakov/go-cloud-file-storage/internal/service/password"
 	userservice "github.com/albakov/go-cloud-file-storage/internal/service/user"
 	usersessionservice "github.com/albakov/go-cloud-file-storage/internal/service/usersession"
@@ -22,9 +20,14 @@ import (
 type Auth struct {
 	pkg                string
 	conf               *config.Config
-	jwt                *jwt.JWT
+	authService        AuthService
 	userService        UserService
 	userSessionService UserSessionService
+}
+
+type AuthService interface {
+	GenerateAccessToken(userId int64) (string, error)
+	GenerateRefreshToken() (string, error)
 }
 
 type UserService interface {
@@ -38,13 +41,18 @@ type UserSessionService interface {
 	DeleteUserSession(userId int64, refreshToken string) error
 }
 
-func New(conf *config.Config, db *sql.DB, j *jwt.JWT) *Auth {
+func New(
+	conf *config.Config,
+	authService AuthService,
+	userService UserService,
+	userSessionService UserSessionService,
+) *Auth {
 	return &Auth{
 		pkg:                "auth",
 		conf:               conf,
-		jwt:                j,
-		userService:        userservice.NewService(db),
-		userSessionService: usersessionservice.NewService(db),
+		authService:        authService,
+		userService:        userService,
+		userSessionService: userSessionService,
 	}
 }
 
@@ -65,18 +73,7 @@ func (a *Auth) LoginHandler(ctx *fiber.Ctx) error {
 	const op = "loginHandler"
 
 	controller.SetCommonHeaders(ctx)
-
-	var r profile.LoginRequest
-	err := ctx.BodyParser(&r)
-	if err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
-	}
-
-	if !a.isEmailAndPasswordValid(r.Email, r.Password) {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(
-			&entity.ErrorResponse{Message: controller.MessageLoginOrPasswordInvalid},
-		)
-	}
+	r := controller.RequestedLogin(ctx)
 
 	us, err := a.userService.UserByEmail(r.Email)
 	if err != nil {
@@ -141,18 +138,7 @@ func (a *Auth) RegisterHandler(ctx *fiber.Ctx) error {
 	const op = "registerHandler"
 
 	controller.SetCommonHeaders(ctx)
-
-	var r profile.RegisterRequest
-	err := ctx.BodyParser(&r)
-	if err != nil {
-		return ctx.Status(fiber.StatusBadRequest).JSON(&entity.ErrorResponse{Message: controller.MessageBadRequest})
-	}
-
-	if !a.isEmailAndPasswordValid(r.Email, r.Password) {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(
-			&entity.ErrorResponse{Message: controller.MessageLoginOrPasswordInvalid},
-		)
-	}
+	r := controller.RequestedLogin(ctx)
 
 	us, err := a.userService.CreateUser(userservice.User{
 		Email:    r.Email,
@@ -229,7 +215,7 @@ func (a *Auth) RefreshHandler(ctx *fiber.Ctx) error {
 		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
 	}
 
-	accessToken, err := a.jwt.GenerateAccessToken(us.UserId)
+	accessToken, err := a.authService.GenerateAccessToken(us.UserId)
 	if err != nil {
 		logger.Add(a.pkg, op, err)
 
@@ -302,19 +288,15 @@ func (a *Auth) setCookie(ctx *fiber.Ctx, refreshToken string, expires time.Time)
 func (a *Auth) tokens(userId int64) (string, string, error) {
 	const op = "tokens"
 
-	accessToken, err := a.jwt.GenerateAccessToken(userId)
+	accessToken, err := a.authService.GenerateAccessToken(userId)
 	if err != nil {
 		return "", "", logger.Error(a.pkg, op, err)
 	}
 
-	refreshToken, err := a.jwt.GenerateRefreshToken()
+	refreshToken, err := a.authService.GenerateRefreshToken()
 	if err != nil {
 		return "", "", logger.Error(a.pkg, op, err)
 	}
 
 	return accessToken, refreshToken, nil
-}
-
-func (a *Auth) isEmailAndPasswordValid(email, password string) bool {
-	return email != "" && password != ""
 }

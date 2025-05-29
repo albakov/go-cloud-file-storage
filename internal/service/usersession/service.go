@@ -26,10 +26,10 @@ type Repository interface {
 	Delete(userId int64, refreshToken string) error
 }
 
-func NewService(db *sql.DB) *Service {
+func NewService(userSessionRepo Repository) *Service {
 	return &Service{
 		pkg:             "usersession.service",
-		userSessionRepo: usersession.NewRepository(db),
+		userSessionRepo: userSessionRepo,
 	}
 }
 

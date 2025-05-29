@@ -1,7 +1,6 @@
 package profile
 
 import (
-	"database/sql"
 	"errors"
 	"github.com/albakov/go-cloud-file-storage/internal/api/controller"
 	"github.com/albakov/go-cloud-file-storage/internal/api/entity"
@@ -13,18 +12,18 @@ import (
 )
 
 type Profile struct {
-	pkg      string
-	userRepo Repository
+	pkg         string
+	userService UserService
 }
 
-type Repository interface {
-	ById(id int64) (user.User, error)
+type UserService interface {
+	UserById(userId int64) (user.User, error)
 }
 
-func New(db *sql.DB) *Profile {
+func New(userService UserService) *Profile {
 	return &Profile{
-		pkg:      "profile",
-		userRepo: user.NewRepository(db),
+		pkg:         "profile",
+		userService: userService,
 	}
 }
 
@@ -45,11 +44,7 @@ func (p *Profile) ShowHandler(ctx *fiber.Ctx) error {
 	controller.SetCommonHeaders(ctx)
 
 	userId := controller.RequestedUserId(ctx)
-	if userId == 0 {
-		return ctx.Status(fiber.StatusUnauthorized).JSON(&entity.ErrorResponse{Message: controller.MessageUnauthorized})
-	}
-
-	us, err := p.userRepo.ById(userId)
+	us, err := p.userService.UserById(userId)
 	if err != nil {
 		if !errors.Is(err, storage.ErrNotFound) {
 			logger.Add(p.pkg, op, err)
